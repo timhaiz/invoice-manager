@@ -1,0 +1,360 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}发票识别 - 发票管理系统{% endblock %}
+
+{% block page_title %}发票识别{% endblock %}
+
+{% block content %}
+{% if not baidu_ocr_configured %}
+<div class="alert alert-warning" role="alert">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>注意：</strong>百度OCR API密钥未配置，发票识别功能暂时不可用。请联系管理员配置百度OCR API密钥。
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-camera"></i> 上传发票
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data" id="upload-form">
+            {% csrf_token %}
+            <div class="upload-area mb-3" id="upload-area">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p class="mb-2">拖放文件到此处或点击选择文件</p>
+                <p class="text-muted small">支持JPG, PNG, PDF格式</p>
+                <input type="file" name="files" id="id_files" class="d-none" accept="image/*,.pdf" multiple>
+                <div id="file-preview" class="d-none mt-3">
+                    <div id="file-list"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="use_baidu_ocr" id="use_baidu_ocr" checked>
+                    <label class="form-check-label" for="use_baidu_ocr">
+                        <i class="fas fa-cloud"></i> 使用百度OCR识别（推荐）
+                    </label>
+                    <small class="form-text text-muted d-block">
+                        启用百度OCR进行高精度识别，对PDF文件将强制使用OCR而非文本提取
+                    </small>
+                </div>
+                <button type="submit" class="btn btn-primary" id="recognize-btn" {% if not baidu_ocr_configured %}disabled{% endif %}>
+                    <i class="fas fa-search"></i> 批量识别发票
+                    {% if not baidu_ocr_configured %}<small class="d-block text-muted">（需要配置百度OCR）</small>{% endif %}
+                </button>
+                <div id="progress-container" class="d-none mt-3">
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: 0%" id="upload-progress">
+                            0%
+                        </div>
+                    </div>
+                    <small class="text-muted" id="progress-text">准备上传...</small>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if recognized_invoices %}
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <i class="fas fa-check-circle"></i> 识别结果
+    </div>
+    <div class="card-body">
+        <form method="post" action="{% url 'invoice:invoice_confirm' %}">
+            {% csrf_token %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>选择</th>
+                            <th>发票号码</th>
+                            <th>金额</th>
+                            <th>日期</th>
+                            <th>销售方</th>
+                            <th>购买方</th>
+                            <th>置信度</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in recognized_invoices %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="invoice_ids" value="{{ forloop.counter0 }}" class="invoice-confirm-checkbox" checked>
+                            </td>
+                            <td>{{ invoice.invoice_number }}</td>
+                            <td>{{ invoice.amount|floatformat:2 }}</td>
+                            <td>{{ invoice.invoice_date|date:"Y-m-d" }}</td>
+                            <td>{{ invoice.seller_name }}</td>
+                            <td>{{ invoice.buyer_name }}</td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" role="progressbar" aria-valuenow="{{ invoice.confidence }}" aria-valuemin="0" aria-valuemax="100" data-width="{{ invoice.confidence }}">
+                                        {{ invoice.confidence }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-between mt-3">
+                <button type="button" class="btn btn-info" id="confirm-all">
+                    <i class="fas fa-check-double"></i> 全选
+                </button>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save"></i> 确认保存
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if pending_recognitions %}
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark">
+        <i class="fas fa-clock"></i> 待确认的识别记录 ({{ pending_recognitions.count }}条)
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">以下是已完成识别但尚未确认为正式发票的记录，请点击确认按钮将其转换为正式发票。</p>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>文件名</th>
+                        <th>上传时间</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for recognition in pending_recognitions %}
+                    <tr>
+                        <td>
+                            <i class="fas fa-file-pdf text-danger me-2"></i>
+                            {{ recognition.file.name|slice:"20:" }}
+                        </td>
+                        <td>{{ recognition.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <span class="badge bg-success">已完成识别</span>
+                        </td>
+                        <td>
+                            <a href="{% url 'invoice:invoice_confirm' recognition.pk %}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-check"></i> 确认
+                            </a>
+                            <a href="{{ recognition.file.url }}" target="_blank" class="btn btn-sm btn-outline-info ms-1">
+                                <i class="fas fa-eye"></i> 查看
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-3">
+            <p class="text-info">
+                <i class="fas fa-info-circle"></i> 
+                提示：您可以逐个确认发票，或选择多个记录后使用批量确认功能。
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger mt-3">
+    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    const uploadArea = $('#upload-area');
+    const fileInput = $('#id_files');
+    const filePreview = $('#file-preview');
+    const fileList = $('#file-list');
+    const progressContainer = $('#progress-container');
+    const progressBar = $('#upload-progress');
+    const progressText = $('#progress-text');
+    const recognizeBtn = $('#recognize-btn');
+    
+    let selectedFiles = [];
+    
+    // 检查元素是否存在
+    console.log('Upload area found:', uploadArea.length);
+    console.log('File input found:', fileInput.length);
+    
+    // 点击事件处理已在main.js中实现，这里不需要重复绑定
+    
+    // 页面特定的文件处理逻辑
+    function handleFileSelection(files) {
+        selectedFiles = files;
+        updateFilePreview();
+    }
+    
+    // 监听文件输入变化（使用原生事件避免jQuery冲突）
+    document.getElementById('id_files').addEventListener('change', function() {
+        handleFileSelection(Array.from(this.files));
+    });
+    
+    // 拖拽上传处理
+    uploadArea.on('dragover', function(e) {
+        e.preventDefault();
+        $(this).addClass('border-primary');
+    });
+    
+    uploadArea.on('dragleave', function(e) {
+        e.preventDefault();
+        $(this).removeClass('border-primary');
+    });
+    
+    uploadArea.on('drop', function(e) {
+        e.preventDefault();
+        $(this).removeClass('border-primary');
+        
+        const files = Array.from(e.originalEvent.dataTransfer.files);
+        handleFileSelection(files);
+        
+        // 更新文件输入框
+        const dt = new DataTransfer();
+        files.forEach(file => dt.items.add(file));
+        fileInput[0].files = dt.files;
+        
+        updateFilePreview();
+    });
+    
+    // 更新文件预览
+    function updateFilePreview() {
+        if (selectedFiles.length > 0) {
+            filePreview.removeClass('d-none');
+            fileList.empty();
+            
+            selectedFiles.forEach((file, index) => {
+                const fileItem = $(`
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                        <div>
+                            <i class="fas fa-file-image text-primary me-2"></i>
+                            <span>${file.name}</span>
+                            <small class="text-muted ms-2">(${(file.size / 1024 / 1024).toFixed(2)} MB)</small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-file" data-index="${index}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `);
+                fileList.append(fileItem);
+            });
+            
+            recognizeBtn.text(`批量识别发票 (${selectedFiles.length}个文件)`);
+        } else {
+            filePreview.addClass('d-none');
+            recognizeBtn.text('批量识别发票');
+        }
+    }
+    
+    // 移除文件
+    $(document).on('click', '.remove-file', function() {
+        const index = parseInt($(this).data('index'));
+        selectedFiles.splice(index, 1);
+        
+        // 更新文件输入框
+        const dt = new DataTransfer();
+        selectedFiles.forEach(file => dt.items.add(file));
+        fileInput[0].files = dt.files;
+        
+        updateFilePreview();
+    });
+    
+    // 表单提交处理
+    $('#upload-form').on('submit', function(e) {
+        if (selectedFiles.length === 0) {
+            e.preventDefault();
+            alert('请选择要上传的文件');
+            return;
+        }
+        
+        e.preventDefault();
+        
+        // 显示进度条
+        progressContainer.removeClass('d-none');
+        recognizeBtn.prop('disabled', true);
+        progressText.text('正在上传和识别文件...');
+        
+        // 创建FormData对象
+        const formData = new FormData(this);
+        
+        // 使用AJAX上传文件并显示进度
+        $.ajax({
+            url: $(this).attr('action') || window.location.href,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhr: function() {
+                const xhr = new window.XMLHttpRequest();
+                // 上传进度
+                xhr.upload.addEventListener('progress', function(evt) {
+                    if (evt.lengthComputable) {
+                        const percentComplete = Math.round((evt.loaded / evt.total) * 100);
+                        progressBar.css('width', percentComplete + '%');
+                        progressBar.text(percentComplete + '%');
+                        
+                        if (percentComplete < 100) {
+                            progressText.text(`正在上传文件... ${percentComplete}%`);
+                        } else {
+                            progressText.text('文件上传完成，正在识别...');
+                        }
+                    }
+                }, false);
+                return xhr;
+            },
+            success: function(response, textStatus, xhr) {
+                // 检查是否是重定向响应
+                if (xhr.getResponseHeader('Content-Type') && xhr.getResponseHeader('Content-Type').includes('text/html')) {
+                    // 如果返回HTML，说明是重定向，直接跳转
+                    window.location.href = xhr.responseURL || window.location.href;
+                } else {
+                    // 处理JSON响应
+                    progressBar.css('width', '100%');
+                    progressBar.text('100%');
+                    progressText.text('识别完成！');
+                    
+                    setTimeout(function() {
+                        if (response.redirect_url) {
+                            window.location.href = response.redirect_url;
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1000);
+                }
+            },
+            error: function(xhr, status, error) {
+                progressText.text('上传失败: ' + error);
+                progressBar.addClass('bg-danger');
+                recognizeBtn.prop('disabled', false);
+                
+                setTimeout(function() {
+                    progressContainer.addClass('d-none');
+                    progressBar.removeClass('bg-danger');
+                    progressBar.css('width', '0%');
+                    progressBar.text('0%');
+                }, 3000);
+            }
+        });
+    });
+    
+    // 全选/取消全选功能已移除，因为它属于批量确认页面
+    
+    // 设置进度条宽度
+    $('.progress-bar[data-width]').each(function() {
+        const width = $(this).data('width');
+        $(this).css('width', width + '%');
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}报表汇总{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">报表汇总</h1>
+    
+    <!-- 筛选表单 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter"></i> 筛选条件
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">开始日期</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">结束日期</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="category" class="form-label">类别</label>
+                    <select class="form-select" id="category" name="category">
+                        <option value="">全部类别</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if request.GET.category == category.id|stringformat:'s' %}selected{% endif %}>{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="buyer_company" class="form-label">购买方公司</label>
+                    <select class="form-select" id="buyer_company" name="buyer_company">
+                        <option value="">全部公司</option>
+                        {% for buyer in buyer_companies %}
+                        <option value="{{ buyer.buyer_name }}" {% if request.GET.buyer_company == buyer.buyer_name %}selected{% endif %}>{{ buyer.buyer_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">筛选</button>
+                    <a href="{% url 'invoice:report_summary' %}" class="btn btn-secondary">重置</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">发票总数</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_count }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">总金额</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">¥{{ total_amount|floatformat:2 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">购买方公司数量</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ buyer_company_stats|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-building fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 按类别统计 -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <i class="fas fa-chart-pie"></i> 按类别统计
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>类别</th>
+                                    <th>数量</th>
+                                    <th>金额</th>
+                                    <th>占比</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in category_stats %}
+                                <tr>
+                                    <td>{{ stat.category__name }}</td>
+                                    <td>{{ stat.count }}</td>
+                                    <td>{{ stat.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ stat.percentage|floatformat:1 }}%" aria-valuenow="{{ stat.percentage|floatformat:1 }}" aria-valuemin="0" aria-valuemax="100">
+                                                 {{ stat.percentage|floatformat:1 }}%
+                                             </div>
+                                         </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <canvas id="categoryChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 销售方统计 -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-store"></i> 按销售方统计
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>销售方名称</th>
+                            <th>发票数量</th>
+                            <th>总金额</th>
+                            <th>占比</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in seller_stats %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-info">{{ stat.seller_name }}</span>
+                            </td>
+                            <td>{{ stat.invoice_count }}</td>
+                            <td>¥{{ stat.total_amount|floatformat:2 }}</td>
+                            <td>
+                                {% if total_amount > 0 %}
+                                {% widthratio stat.total_amount total_amount 100 as percentage %}
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ percentage|floatformat:1 }}%" aria-valuenow="{{ percentage|floatformat:1 }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ percentage|floatformat:1 }}%
+                                    </div>
+                                </div>
+                                {% else %}
+                                0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">暂无销售方数据</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 购买方统计 -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-white">
+            <i class="fas fa-shopping-cart"></i> 按购买方统计
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>购买方名称</th>
+                            <th>发票数量</th>
+                            <th>总金额</th>
+                            <th>占比</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in buyer_stats %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-warning">{{ stat.buyer_name }}</span>
+                            </td>
+                            <td>{{ stat.invoice_count }}</td>
+                            <td>¥{{ stat.total_amount|floatformat:2 }}</td>
+                            <td>
+                                {% if total_amount > 0 %}
+                                {% widthratio stat.total_amount total_amount 100 as percentage %}
+                                <div class="progress">
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ percentage|floatformat:1 }}%" aria-valuenow="{{ percentage|floatformat:1 }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ percentage|floatformat:1 }}%
+                                    </div>
+                                </div>
+                                {% else %}
+                                0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">暂无购买方数据</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 月度趋势 -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-chart-line"></i> 月度趋势
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-12">
+                    <canvas id="monthlyTrendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出按钮 -->
+    <div class="text-center mb-4">
+        <a href="{% url 'invoice:report_export' %}?date_from={{ request.GET.date_from }}&date_to={{ request.GET.date_to }}&category={{ request.GET.category }}&company={{ request.GET.company }}" class="btn btn-success">
+            <i class="fas fa-file-export"></i> 导出CSV
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // 类别饼图
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    let categoryLabels = [];
+    let categoryData = [];
+    
+    {% if category_stats %}
+    categoryLabels = [{% for stat in category_stats %}'{{ stat.category__name|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    categoryData = [{% for stat in category_stats %}{{ stat.total_amount|default:0 }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    {% else %}
+    categoryLabels = ['无数据'];
+    categoryData = [0];
+    {% endif %}
+    
+    const categoryChart = new Chart(categoryCtx, {
+        type: 'pie',
+        data: {
+            labels: categoryLabels,
+            datasets: [{
+                data: categoryData,
+                backgroundColor: [
+                    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', 
+                    '#5a5c69', '#858796', '#6f42c1', '#fd7e14', '#20c997'
+                ],
+                hoverBackgroundColor: [
+                    '#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#be2617', 
+                    '#3a3b45', '#656776', '#5a32a3', '#d66200', '#17a286'
+                ],
+                hoverBorderColor: "rgba(234, 236, 244, 1)",
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value.toFixed(2)}元 (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        },
+    });
+
+    // 月度趋势图
+    const trendCtx = document.getElementById('monthlyTrendChart').getContext('2d');
+    const trendLabels = [{% for month in month_stats %}'{{ month.month }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+    const trendData = [{% for month in month_stats %}{{ month.total|default:0 }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    
+    // 检查是否有数据，如果没有则显示空图表
+    if (trendLabels.length === 0) {
+        trendLabels.push('无数据');
+        trendData.push(0);
+    }
+    
+    const trendChart = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: trendLabels,
+            datasets: [{
+                label: '发票金额',
+                data: trendData,
+                backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                borderColor: 'rgba(78, 115, 223, 1)',
+                pointBackgroundColor: 'rgba(78, 115, 223, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(78, 115, 223, 1)',
+                tension: 0.3
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '元';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.raw.toFixed(2) + '元';
+                        }
+                    }
+                }
+            }
+        },
+    });
+</script>
+{% endblock %}

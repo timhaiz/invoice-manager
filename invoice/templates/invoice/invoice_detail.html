@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}发票详情 - 发票管理系统{% endblock %}
+
+{% block page_title %}发票详情{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-file-invoice"></i> 发票信息</span>
+            <div>
+                <a href="{% url 'invoice:invoice_edit' invoice.id %}" class="btn btn-light btn-sm">
+                    <i class="fas fa-edit"></i> 编辑
+                </a>
+                <a href="{% url 'invoice:invoice_list' %}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> 返回列表
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h5 class="card-title">基本信息</h5>
+                <table class="table table-bordered">
+                    <tr>
+                        <th style="width: 30%">发票号码</th>
+                        <td>{{ invoice.invoice_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>发票内容</th>
+                        <td>{{ invoice.invoice_content }}</td>
+                    </tr>
+                    <tr>
+                        <th>开票日期</th>
+                        <td>{{ invoice.invoice_date|date:"Y-m-d" }}</td>
+                    </tr>
+                    <tr>
+                        <th>金额</th>
+                        <td>{{ invoice.amount|floatformat:2 }} 元</td>
+                    </tr>
+                    <tr>
+                        <th>税额</th>
+                        <td>{{ invoice.tax_amount|floatformat:2 }} 元</td>
+                    </tr>
+                    <tr>
+                        <th>价税合计</th>
+                        <td><strong>{{ invoice.total_amount|floatformat:2 }} 元</strong></td>
+                    </tr>
+                    <tr>
+                        <th>类别</th>
+                        <td><span class="badge bg-info">{{ invoice.category.name }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>状态</th>
+                        <td>
+                            {% if invoice.is_used %}
+                            <span class="badge bg-success">已使用</span>
+                            {% else %}
+                            <span class="badge bg-warning">未使用</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>备注</th>
+                        <td>{{ invoice.description|default:"无" }}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h5 class="card-title">交易方信息</h5>
+                <table class="table table-bordered">
+                    <tr>
+                        <th colspan="2" class="table-light">销售方信息</th>
+                    </tr>
+                    <tr>
+                        <th style="width: 30%">名称</th>
+                        <td>{{ invoice.seller_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>税号</th>
+                        <td>{{ invoice.seller_tax_id }}</td>
+                    </tr>
+                    <tr>
+                        <th>地址电话</th>
+                        <td>{{ invoice.seller_address_phone|default:"无" }}</td>
+                    </tr>
+                    <tr>
+                        <th>开户行及账号</th>
+                        <td>{{ invoice.seller_bank_account|default:"无" }}</td>
+                    </tr>
+                    <tr>
+                        <th colspan="2" class="table-light">购买方信息</th>
+                    </tr>
+                    <tr>
+                        <th>名称</th>
+                        <td>{{ invoice.buyer_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>税号</th>
+                        <td>{{ invoice.buyer_tax_id }}</td>
+                    </tr>
+                    <tr>
+                        <th>地址电话</th>
+                        <td>{{ invoice.buyer_address_phone|default:"无" }}</td>
+                    </tr>
+                    <tr>
+                        <th>开户行及账号</th>
+                        <td>{{ invoice.buyer_bank_account|default:"无" }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        {% if invoice.image %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <h5 class="card-title">发票图片</h5>
+                <div class="text-center">
+                    <img src="{{ invoice.image.url }}" alt="发票图片" class="img-fluid img-thumbnail" style="max-height: 400px;">
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <h5 class="card-title">系统信息</h5>
+                <table class="table table-bordered">
+                    <tr>
+                        <th style="width: 30%">添加时间</th>
+                        <td>{{ invoice.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    <tr>
+                        <th>最后更新</th>
+                        <td>{{ invoice.updated_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    <tr>
+                        <th>识别来源</th>
+                        <td>
+                            {% if invoice.recognition_source %}
+                            <span class="badge bg-secondary">{{ invoice.get_recognition_source_display }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">手动录入</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'invoice:invoice_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> 返回列表
+            </a>
+            <div>
+                {% for recognition in invoice.recognitions.all %}
+                    {% if recognition.file %}
+                        <a href="{% url 'invoice:download_invoice_file' recognition.id %}" class="btn btn-success me-2">
+                            <i class="fas fa-download"></i> 下载原始文件
+                        </a>
+                    {% endif %}
+                {% empty %}
+                {% endfor %}
+                <form method="post" action="{% url 'invoice:invoice_delete' invoice.id %}" style="display: inline;" onsubmit="return confirm('⚠️ 警告：您即将删除发票 {{ invoice.invoice_number }}！\n\n此操作将永久删除该发票，无法恢复。\n\n请确认您真的要执行此操作吗？');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

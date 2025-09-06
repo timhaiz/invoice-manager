@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}批量确认发票 - 发票管理系统{% endblock %}
+
+{% block page_title %}批量确认发票{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <i class="fas fa-check-circle"></i> 批量识别结果确认
+        <span class="badge bg-light text-dark ms-2">{{ recognition_data|length }} 张发票</span>
+    </div>
+    <div class="card-body">
+        <form method="post" id="batch-confirm-form">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="select-all">
+                            <i class="fas fa-check-double"></i> 全选
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="select-none">
+                            <i class="fas fa-square"></i> 取消全选
+                        </button>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-success" id="confirm-selected">
+                            <i class="fas fa-save"></i> 确认保存选中项
+                        </button>
+                        <a href="{% url 'invoice:invoice_recognize' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> 返回
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="accordion" id="invoiceAccordion">
+                {% for data in recognition_data %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                        <button class="accordion-button{% if not forloop.first %} collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapse{{ forloop.counter }}">
+                            <div class="form-check me-3">
+                                <input class="form-check-input invoice-checkbox" type="checkbox" name="recognition_ids" value="{{ data.recognition.pk }}" id="check{{ forloop.counter }}" checked>
+                            </div>
+                            <div class="flex-grow-1">
+                                <strong>{{ data.invoice_info.invoice_number|default:"未识别" }}</strong>
+                                <span class="text-muted ms-2">{{ data.invoice_info.seller_name|default:"未知销售方" }}</span>
+                                <span class="badge bg-primary ms-2">¥{{ data.invoice_info.total_amount|default:"0" }}</span>
+                                <small class="text-muted ms-2">{{ data.recognition.file.name }}</small>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse{% if forloop.first %} show{% endif %}" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#invoiceAccordion">
+                        <div class="accordion-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-primary">基本信息</h6>
+                                    <div class="mb-3">
+                                        <label class="form-label">发票号码 *</label>
+                                        <input type="text" class="form-control" name="recognition_{{ data.recognition.pk }}_invoice_number" value="{{ data.invoice_info.invoice_number }}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">发票内容</label>
+                                        <input type="text" class="form-control" name="recognition_{{ data.recognition.pk }}_invoice_content" value="{{ data.invoice_info.invoice_content }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">开票日期 *</label>
+                                        <input type="date" class="form-control" name="recognition_{{ data.recognition.pk }}_invoice_date" value="{{ data.invoice_info.invoice_date }}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">发票类型</label>
+                                        <select class="form-select" name="recognition_{{ data.recognition.pk }}_invoice_type">
+                                            {% for choice in invoice_type_choices %}
+                                            <option value="{{ choice.0 }}"{% if choice.0 == data.invoice_info.invoice_type %} selected{% endif %}>{{ choice.1 }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-primary">金额信息</h6>
+                                    <div class="mb-3">
+                                        <label class="form-label">金额 *</label>
+                                        <input type="number" step="0.01" class="form-control" name="recognition_{{ data.recognition.pk }}_amount" value="{{ data.invoice_info.amount }}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">税额</label>
+                                        <input type="number" step="0.01" class="form-control" name="recognition_{{ data.recognition.pk }}_tax_amount" value="{{ data.invoice_info.tax_amount }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">价税合计 *</label>
+                                        <input type="number" step="0.01" class="form-control" name="recognition_{{ data.recognition.pk }}_total_amount" value="{{ data.invoice_info.total_amount }}" required>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-primary">销售方信息</h6>
+                                    <div class="mb-3">
+                                        <label class="form-label">销售方名称</label>
+                                        <input type="text" class="form-control" name="recognition_{{ data.recognition.pk }}_seller_name" value="{{ data.invoice_info.seller_name }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">销售方税号</label>
+                                        <input type="text" class="form-control" name="recognition_{{ data.recognition.pk }}_seller_tax_id" value="{{ data.invoice_info.seller_tax_id }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-primary">购买方信息</h6>
+                                    <div class="mb-3">
+                                        <label class="form-label">购买方名称</label>
+                                        <input type="text" class="form-control" name="recognition_{{ data.recognition.pk }}_buyer_name" value="{{ data.invoice_info.buyer_name }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">购买方税号</label>
+                                        <input type="text" class="form-control" name="recognition_{{ data.recognition.pk }}_buyer_tax_id" value="{{ data.invoice_info.buyer_tax_id }}">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">发票类别</label>
+                                        <select class="form-select" name="recognition_{{ data.recognition.pk }}_category">
+                                            <option value="">请选择类别</option>
+                                            {% for category in categories %}
+                                            <option value="{{ category.pk }}">{{ category.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">所属公司</label>
+                                        <select class="form-select" name="recognition_{{ data.recognition.pk }}_company">
+                                            <option value="">请选择公司</option>
+                                            {% for company in companies %}
+                                            <option value="{{ company.pk }}">{{ company.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">描述</label>
+                                <textarea class="form-control" name="recognition_{{ data.recognition.pk }}_description" rows="2">{{ data.invoice_info.description }}</textarea>
+                            </div>
+                            
+                            {% if data.recognition.file %}
+                            <div class="mb-3">
+                                <label class="form-label">原始文件</label>
+                                <div>
+                                    <a href="{{ data.recognition.file.url }}" target="_blank" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-eye"></i> 查看原文件
+                                    </a>
+                                    <small class="text-muted ms-2">{{ data.recognition.file.name }}</small>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-4 text-center">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="fas fa-save"></i> 确认保存选中的发票
+                </button>
+                <a href="{% url 'invoice:invoice_recognize' %}" class="btn btn-secondary btn-lg ms-2">
+                    <i class="fas fa-arrow-left"></i> 返回重新识别
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // 全选功能
+    $('#select-all').on('click', function() {
+        $('.invoice-checkbox').each(function() {
+            this.checked = true;
+        });
+        updateConfirmButton();
+    });
+    
+    // 取消全选功能
+    $('#select-none').on('click', function() {
+        $('.invoice-checkbox').each(function() {
+            this.checked = false;
+        });
+        updateConfirmButton();
+    });
+    
+    // 监听复选框变化 - 使用更具体的选择器避免全局冲突
+    $('#batch-confirm-form').on('change', '.invoice-checkbox', function() {
+        updateConfirmButton();
+    });
+    
+    // 更新确认按钮状态
+    function updateConfirmButton() {
+        const checkedCount = $('.invoice-checkbox:checked').length;
+        const confirmBtn = $('#confirm-selected');
+        
+        if (checkedCount > 0) {
+            confirmBtn.prop('disabled', false);
+            confirmBtn.html(`<i class="fas fa-save"></i> 确认保存选中项 (${checkedCount})`);
+        } else {
+            confirmBtn.prop('disabled', true);
+            confirmBtn.html('<i class="fas fa-save"></i> 确认保存选中项');
+        }
+    }
+    
+    // 表单提交验证
+    $('#batch-confirm-form').on('submit', function(e) {
+        const checkedCount = $('.invoice-checkbox:checked').length;
+        
+        if (checkedCount === 0) {
+            e.preventDefault();
+            alert('请至少选择一张发票进行确认');
+            return false;
+        }
+        
+        // 验证必填字段
+        let hasError = false;
+        $('.invoice-checkbox:checked').each(function() {
+            const recognitionId = $(this).val();
+            const requiredFields = [
+                `recognition_${recognitionId}_invoice_number`,
+                `recognition_${recognitionId}_invoice_date`,
+                `recognition_${recognitionId}_amount`,
+                `recognition_${recognitionId}_total_amount`
+            ];
+            
+            requiredFields.forEach(function(fieldName) {
+                const field = $(`[name="${fieldName}"]`);
+                if (!field.val() || field.val().trim() === '') {
+                    field.addClass('is-invalid');
+                    hasError = true;
+                } else {
+                    field.removeClass('is-invalid');
+                }
+            });
+        });
+        
+        if (hasError) {
+            e.preventDefault();
+            alert('请填写所有必填字段（标有 * 的字段）');
+            return false;
+        }
+        
+        return confirm(`确认保存选中的 ${checkedCount} 张发票吗？`);
+    });
+    
+    // 初始化按钮状态
+    updateConfirmButton();
+    
+    // 阻止accordion header中的checkbox事件冒泡
+    $('.form-check-input').on('click', function(e) {
+        e.stopPropagation();
+    });
+});
+</script>
+{% endblock %}

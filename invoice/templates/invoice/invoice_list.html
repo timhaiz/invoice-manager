@@ -1,0 +1,362 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}发票列表 - 发票管理系统{% endblock %}
+
+{% block page_title %}发票列表{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<!-- 搜索和过滤 -->
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <i class="fas fa-search"></i> 搜索和过滤
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="search" class="form-label">关键词</label>
+                <input type="text" class="form-control" id="search" name="search" value="{{ request.GET.search }}" placeholder="发票号码、发票内容等">
+            </div>
+            <div class="col-md-3">
+                <label for="seller" class="form-label">销售方</label>
+                <input type="text" class="form-control" id="seller" name="seller" value="{{ request.GET.seller }}" placeholder="销售方名称">
+            </div>
+            <div class="col-md-3">
+                <label for="buyer" class="form-label">购买方</label>
+                <input type="text" class="form-control" id="buyer" name="buyer" value="{{ request.GET.buyer }}" placeholder="购买方名称">
+            </div>
+            <div class="col-md-2">
+                <label for="category" class="form-label">发票类别</label>
+                <select class="form-select" id="category" name="category">
+                    <option value="">全部类别</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"i" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="buyer_company" class="form-label">购买方公司</label>
+                <select class="form-select" id="buyer_company" name="buyer_company">
+                    <option value="">全部公司</option>
+                    {% for buyer in buyer_companies %}
+                    <option value="{{ buyer.buyer_name }}" {% if request.GET.buyer_company == buyer.buyer_name %}selected{% endif %}>{{ buyer.buyer_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="start_date" class="form-label">开始月份</label>
+                <input type="month" class="form-control" id="start_date" name="start_date" value="{{ request.GET.start_date }}">
+            </div>
+            <div class="col-md-2">
+                <label for="end_date" class="form-label">结束月份</label>
+                <input type="month" class="form-control" id="end_date" name="end_date" value="{{ request.GET.end_date }}">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> 搜索
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <a href="{% url 'invoice:invoice_list' %}" class="btn btn-outline-secondary w-100">
+                    <i class="fas fa-times"></i> 清空
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 操作按钮 -->
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <div>
+        <a href="{% url 'invoice:invoice_add' %}" class="btn btn-success">
+            <i class="fas fa-plus"></i> 添加发票
+        </a>
+        <a href="{% url 'invoice:invoice_recognize' %}" class="btn btn-info">
+            <i class="fas fa-camera"></i> 识别发票
+        </a>
+    </div>
+    <div id="batch-actions" style="display: none;">
+        <button type="button" class="btn btn-success me-2" id="batch-download-btn">
+            <i class="fas fa-download"></i> 下载选中的发票文件
+        </button>
+        <button type="button" class="btn btn-danger" id="batch-delete-btn">
+            <i class="fas fa-trash"></i> 删除选中的发票
+        </button>
+    </div>
+</div>
+
+<!-- 发票列表 -->
+{% if page_obj %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">
+                            <input type="checkbox" id="select-all" class="form-check-input">
+                        </th>
+                        <th class="sortable" data-field="invoice_number">发票号码</th>
+                        <th class="sortable" data-field="amount">金额</th>
+                        <th class="sortable" data-field="invoice_date">开票日期</th>
+                        <th>销售方</th>
+                        <th>购买方</th>
+                        <th>类别</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in page_obj %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="form-check-input invoice-checkbox" value="{{ invoice.id }}">
+                        </td>
+                        <td>{{ invoice.invoice_number }}</td>
+                        <td>{{ invoice.amount|floatformat:2 }}</td>
+                        <td>{{ invoice.invoice_date|date:"Y-m-d" }}</td>
+                        <td>{{ invoice.seller_name }}</td>
+                        <td>{{ invoice.buyer_name }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ invoice.category.name }}</span>
+                        </td>
+                        <td>
+                            {% if invoice.status == 'USED' %}
+                            <span class="badge bg-success">已使用</span>
+                            {% elif invoice.status == 'VERIFIED' %}
+                            <span class="badge bg-info">已验证</span>
+                            {% elif invoice.status == 'REJECTED' %}
+                            <span class="badge bg-danger">已拒绝</span>
+                            {% else %}
+                            <span class="badge bg-warning">待处理</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="{% url 'invoice:invoice_detail' invoice.id %}" class="btn btn-sm btn-outline-primary btn-action" data-bs-toggle="tooltip" title="查看详情">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'invoice:invoice_edit' invoice.id %}" class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="tooltip" title="编辑">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% for recognition in invoice.recognitions.all %}
+                                    {% if recognition.file %}
+                                        <a href="{% url 'invoice:download_invoice_file' recognition.id %}" class="btn btn-sm btn-outline-success btn-action" data-bs-toggle="tooltip" title="下载原始文件">
+                                            <i class="fas fa-download"></i>
+                                        </a>
+                                    {% endif %}
+                                {% empty %}
+                                {% endfor %}
+                                <form method="post" action="{% url 'invoice:invoice_delete' invoice.id %}" style="display: inline;" onsubmit="return confirm('⚠️ 警告：您即将删除发票 {{ invoice.invoice_number }}！\n\n此操作将永久删除该发票，无法恢复。\n\n请确认您真的要执行此操作吗？');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger btn-action" data-bs-toggle="tooltip" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                <i class="fas fa-angle-double-left"></i>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                <i class="fas fa-angle-left"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <a class="page-link" href="#"><i class="fas fa-angle-double-left"></i></a>
+        </li>
+        <li class="page-item disabled">
+            <a class="page-link" href="#"><i class="fas fa-angle-left"></i></a>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+        <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+        <li class="page-item">
+            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                <i class="fas fa-angle-right"></i>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                <i class="fas fa-angle-double-right"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <a class="page-link" href="#"><i class="fas fa-angle-right"></i></a>
+        </li>
+        <li class="page-item disabled">
+            <a class="page-link" href="#"><i class="fas fa-angle-double-right"></i></a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 暂无发票记录，请添加或识别发票。
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const invoiceCheckboxes = document.querySelectorAll('.invoice-checkbox');
+    const batchActions = document.getElementById('batch-actions');
+    const batchDeleteBtn = document.getElementById('batch-delete-btn');
+    const batchDownloadBtn = document.getElementById('batch-download-btn');
+    
+    // 检查必要元素是否存在
+    if (!selectAllCheckbox || !batchActions || !batchDeleteBtn || !batchDownloadBtn) {
+        console.warn('批量操作元素未找到，跳过初始化');
+        return;
+    }
+
+    // 全选/取消全选功能
+    selectAllCheckbox.addEventListener('change', function() {
+        invoiceCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        toggleBatchActions();
+    });
+
+    // 单个复选框变化时的处理
+    invoiceCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            // 检查是否所有复选框都被选中
+            const checkedCount = document.querySelectorAll('.invoice-checkbox:checked').length;
+            selectAllCheckbox.checked = checkedCount === invoiceCheckboxes.length;
+            selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < invoiceCheckboxes.length;
+            
+            toggleBatchActions();
+        });
+    });
+
+    // 显示/隐藏批量操作按钮
+    function toggleBatchActions() {
+        const checkedCount = document.querySelectorAll('.invoice-checkbox:checked').length;
+        batchActions.style.display = checkedCount > 0 ? 'block' : 'none';
+    }
+
+    // 批量删除功能
+    batchDeleteBtn.addEventListener('click', function(e) {
+        e.preventDefault(); // 防止默认行为
+        
+        const checkedBoxes = document.querySelectorAll('.invoice-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            alert('请选择要删除的发票');
+            return;
+        }
+
+        const invoiceIds = Array.from(checkedBoxes).map(cb => cb.value);
+        const confirmMessage = `⚠️ 警告：您即将删除 ${invoiceIds.length} 张发票！\n\n此操作将永久删除这些发票，无法恢复。\n\n请确认您真的要执行此操作吗？`;
+        
+        // 使用双重确认
+        if (confirm(confirmMessage)) {
+            const secondConfirm = confirm('请再次确认：您确定要删除这些发票吗？');
+            if (!secondConfirm) {
+                return;
+            }
+            // 创建表单并提交
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{% url "invoice:batch_delete" %}';
+            
+            // 添加CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                             document.querySelector('meta[name=csrf-token]')?.content;
+            if (csrfToken) {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+            }
+            
+            // 添加发票ID
+            invoiceIds.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'invoice_ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+
+    // 批量下载功能
+    batchDownloadBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const checkedBoxes = document.querySelectorAll('.invoice-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            alert('请选择要下载的发票');
+            return;
+        }
+
+        const invoiceIds = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        // 创建表单并提交
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "invoice:batch_download_invoice_files" %}';
+        
+        // 添加CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                         document.querySelector('meta[name=csrf-token]')?.content;
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+        
+        // 添加发票ID
+        invoiceIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'invoice_ids';
+            input.value = id;
+            form.appendChild(input);
+        });
+        
+        document.body.appendChild(form);
+        form.submit();
+    });
+});
+</script>
+
+{% endblock %}

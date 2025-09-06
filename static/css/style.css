@@ -1,0 +1,178 @@
+/* 全局样式 */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.footer {
+    margin-top: auto;
+}
+
+/* 导航栏样式 */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+/* 卡片样式 */
+.card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.card-header {
+    font-weight: bold;
+}
+
+/* 表格样式 */
+.table th {
+    background-color: #f8f9fa;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* 按钮样式 */
+.btn-action {
+    margin-right: 5px;
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.asteriskField {
+    color: red;
+    margin-left: 2px;
+}
+
+/* 发票卡片 */
+.invoice-card {
+    border-left: 4px solid #007bff;
+}
+
+.invoice-card.paid {
+    border-left-color: #28a745;
+}
+
+.invoice-card.pending {
+    border-left-color: #ffc107;
+}
+
+.invoice-card.rejected {
+    border-left-color: #dc3545;
+}
+
+/* 状态标签 */
+.status-badge {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* 统计卡片 */
+.stat-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.stat-card .stat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #007bff;
+}
+
+.stat-card .stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.stat-card .stat-label {
+    font-size: 1rem;
+    color: #6c757d;
+}
+
+/* 首页仪表盘 */
+.dashboard-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-card .card-body {
+    flex: 1;
+}
+
+/* 发票识别上传区域 */
+.upload-area {
+    border: 2px dashed #007bff;
+    border-radius: 5px;
+    padding: 2rem;
+    text-align: center;
+    background-color: rgba(0, 123, 255, 0.05);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.upload-area i {
+    font-size: 3rem;
+    color: #007bff;
+    margin-bottom: 1rem;
+}
+
+/* 打印样式 */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .print-only {
+        display: block !important;
+    }
+    
+    .container {
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    body {
+        font-size: 12pt;
+    }
+    
+    .table {
+        border-collapse: collapse !important;
+    }
+    
+    .table td, .table th {
+        background-color: #fff !important;
+        border: 1px solid #000 !important;
+    }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .card-columns {
+        column-count: 1;
+    }
+    
+    .stat-card .stat-icon {
+        font-size: 2rem;
+    }
+    
+    .stat-card .stat-value {
+        font-size: 1.5rem;
+    }
+}

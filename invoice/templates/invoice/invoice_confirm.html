@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}确认发票信息{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>确认发票信息</h2>
+            <p class="text-muted">请确认识别的发票信息是否正确，如有错误请手动修改</p>
+            
+            {% if recognition.file %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>原始发票文件</h5>
+                </div>
+                <div class="card-body text-center">
+                    {% if recognition.file.url|slice:"-4:" == ".pdf" %}
+                        <p><i class="fas fa-file-pdf fa-3x text-danger"></i></p>
+                        <p>PDF文件: {{ recognition.file.name }}</p>
+                        <a href="{{ recognition.file.url }}" target="_blank" class="btn btn-outline-primary">查看PDF</a>
+                    {% else %}
+                        <img src="{{ recognition.file.url }}" alt="发票图片" class="img-fluid" style="max-height: 400px;">
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <form method="post" class="needs-validation" novalidate>
+                {% csrf_token %}
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5>发票基本信息</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="invoice_number" class="form-label">发票号码 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="invoice_number" name="invoice_number" 
+                                           value="{{ invoice_info.invoice_number|default:'' }}" required>
+                                    <div class="invalid-feedback">请输入发票号码</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="invoice_content" class="form-label">发票内容 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="invoice_content" name="invoice_content" 
+                                           value="{{ invoice_info.invoice_content|default:'' }}" required>
+                                    <div class="invalid-feedback">请输入发票内容</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="invoice_date" class="form-label">开票日期 <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="invoice_date" name="invoice_date" 
+                                           value="{{ invoice_info.invoice_date|default:'' }}" required>
+                                    <div class="invalid-feedback">请选择开票日期</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="invoice_type" class="form-label">发票类型</label>
+                                    <select class="form-control" id="invoice_type" name="invoice_type">
+                                        {% for value, label in invoice_type_choices %}
+                                            <option value="{{ value }}" {% if invoice_info.invoice_type == value %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5>金额信息</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label for="amount" class="form-label">金额 <span class="text-danger">*</span></label>
+                                    <input type="number" step="0.01" class="form-control" id="amount" name="amount" 
+                                           value="{{ invoice_info.amount|default:'' }}" required>
+                                    <div class="invalid-feedback">请输入金额</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label for="tax_amount" class="form-label">税额</label>
+                                    <input type="number" step="0.01" class="form-control" id="tax_amount" name="tax_amount" 
+                                           value="{{ invoice_info.tax_amount|default:'' }}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label for="total_amount" class="form-label">价税合计</label>
+                                    <input type="number" step="0.01" class="form-control" id="total_amount" name="total_amount" 
+                                           value="{{ invoice_info.total_amount|default:'' }}" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5>销售方信息</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="seller_name" class="form-label">销售方名称</label>
+                                    <input type="text" class="form-control" id="seller_name" name="seller_name" 
+                                           value="{{ invoice_info.seller_name|default:'' }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="seller_tax_id" class="form-label">销售方纳税人识别号</label>
+                                    <input type="text" class="form-control" id="seller_tax_id" name="seller_tax_id" 
+                                           value="{{ invoice_info.seller_tax_id|default:'' }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5>购买方信息</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="buyer_name" class="form-label">购买方名称</label>
+                                    <input type="text" class="form-control" id="buyer_name" name="buyer_name" 
+                                           value="{{ invoice_info.buyer_name|default:'' }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="buyer_tax_id" class="form-label">购买方纳税人识别号</label>
+                                    <input type="text" class="form-control" id="buyer_tax_id" name="buyer_tax_id" 
+                                           value="{{ invoice_info.buyer_tax_id|default:'' }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5>分类信息</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="category" class="form-label">发票类别</label>
+                                    <select class="form-control" id="category" name="category">
+                                        <option value="">请选择类别</option>
+                                        {% for category in categories %}
+                                            <option value="{{ category.id }}">{{ category.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="company" class="form-label">所属公司</label>
+                                    <select class="form-control" id="company" name="company">
+                                        <option value="">请选择公司</option>
+                                        {% for company in companies %}
+                                            <option value="{{ company.id }}">{{ company.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="description" class="form-label">备注</label>
+                            <textarea class="form-control" id="description" name="description" rows="3">{{ invoice_info.description|default:'' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">确认并保存</button>
+                    <a href="{% url 'invoice:invoice_recognize' %}" class="btn btn-secondary">返回</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// 自动计算价税合计
+function calculateTotal() {
+    const amount = parseFloat(document.getElementById('amount').value) || 0;
+    const taxAmount = parseFloat(document.getElementById('tax_amount').value) || 0;
+    document.getElementById('total_amount').value = (amount + taxAmount).toFixed(2);
+}
+
+// 监听金额和税额变化
+document.getElementById('amount').addEventListener('input', calculateTotal);
+document.getElementById('tax_amount').addEventListener('input', calculateTotal);
+
+// 表单验证
+(function() {
+    'use strict';
+    window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.checkValidity() === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    }, false);
+})();
+
+// 初始计算
+calculateTotal();
+</script>
+{% endblock %}

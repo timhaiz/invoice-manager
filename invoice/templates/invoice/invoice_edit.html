@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+
+{% block title %}编辑发票 - 发票管理系统{% endblock %}
+
+{% block page_title %}编辑发票{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-edit"></i> 编辑发票
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="invoice_number">发票号码 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="invoice_number" name="invoice_number" 
+                               value="{{ invoice.invoice_number }}" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="invoice_date">发票日期 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="invoice_date" name="invoice_date" 
+                               value="{{ invoice.invoice_date|date:'Y-m-d' }}" required>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="invoice_type">发票类型</label>
+                        <select class="form-control" id="invoice_type" name="invoice_type">
+                            {% for value, label in invoice_type_choices %}
+                                <option value="{{ value }}" {% if invoice.invoice_type == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="category">发票分类</label>
+                        <select class="form-control" id="category" name="category">
+                            <option value="">请选择分类</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}" {% if invoice.category_id == category.id %}selected{% endif %}>
+                                    {{ category.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="invoice_content">发票内容</label>
+                <textarea class="form-control" id="invoice_content" name="invoice_content" rows="3">{{ invoice.invoice_content }}</textarea>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="amount">金额 <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" class="form-control" id="amount" name="amount" 
+                               value="{{ invoice.amount }}" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="tax_amount">税额</label>
+                        <input type="number" step="0.01" class="form-control" id="tax_amount" name="tax_amount" 
+                               value="{{ invoice.tax_amount }}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="total_amount">总金额</label>
+                        <input type="number" step="0.01" class="form-control" id="total_amount" name="total_amount" 
+                               value="{{ invoice.total_amount }}">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="seller_name">销售方名称</label>
+                        <input type="text" class="form-control" id="seller_name" name="seller_name" 
+                               value="{{ invoice.seller_name }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="seller_tax_id">销售方税号</label>
+                        <input type="text" class="form-control" id="seller_tax_id" name="seller_tax_id" 
+                               value="{{ invoice.seller_tax_id }}">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="buyer_name">购买方名称</label>
+                        <input type="text" class="form-control" id="buyer_name" name="buyer_name" 
+                               value="{{ invoice.buyer_name }}" list="buyer_companies_list">
+                        <datalist id="buyer_companies_list">
+                            {% for company in buyer_companies %}
+                                <option value="{{ company.buyer_name }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="buyer_tax_id">购买方税号</label>
+                        <input type="text" class="form-control" id="buyer_tax_id" name="buyer_tax_id" 
+                               value="{{ invoice.buyer_tax_id }}">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">备注</label>
+                <textarea class="form-control" id="description" name="description" rows="3">{{ invoice.description }}</textarea>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="file">发票文件</label>
+                        <input type="file" class="form-control-file" id="file" name="file" accept=".pdf,.jpg,.jpeg,.png">
+                        {% if invoice.file %}
+                            <small class="form-text text-muted">
+                                当前文件: <a href="{{ invoice.file.url }}" target="_blank">{{ invoice.file.name }}</a>
+                            </small>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="image">发票图片</label>
+                        <input type="file" class="form-control-file" id="image" name="image" accept=".jpg,.jpeg,.png">
+                        {% if invoice.image %}
+                            <small class="form-text text-muted">
+                                当前图片: <a href="{{ invoice.image.url }}" target="_blank">{{ invoice.image.name }}</a>
+                            </small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> 保存修改
+                </button>
+                <a href="{% url 'invoice:invoice_detail' invoice.pk %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> 取消
+                </a>
+                <a href="{% url 'invoice:invoice_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-list"></i> 返回列表
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// 自动计算总金额
+document.addEventListener('DOMContentLoaded', function() {
+    const amountInput = document.getElementById('amount');
+    const taxAmountInput = document.getElementById('tax_amount');
+    const totalAmountInput = document.getElementById('total_amount');
+    
+    function calculateTotal() {
+        const amount = parseFloat(amountInput.value) || 0;
+        const taxAmount = parseFloat(taxAmountInput.value) || 0;
+        totalAmountInput.value = (amount + taxAmount).toFixed(2);
+    }
+    
+    amountInput.addEventListener('input', calculateTotal);
+    taxAmountInput.addEventListener('input', calculateTotal);
+});
+</script>
+{% endblock %}

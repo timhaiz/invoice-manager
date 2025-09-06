@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}手动填写发票信息{% endblock %}
+
+{% block extra_css %}
+<style>
+.recognition-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+}
+
+.recognition-card.failed {
+    border-color: #dc3545;
+    background-color: #f8d7da;
+}
+
+.recognition-card.success {
+    border-color: #28a745;
+    background-color: #d4edda;
+}
+
+.file-info {
+    background-color: #e9ecef;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-group {
+    flex: 1;
+}
+
+.form-group.full-width {
+    flex: 100%;
+}
+
+.error-message {
+    color: #dc3545;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.success-message {
+    color: #28a745;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.btn-group {
+    margin: 20px 0;
+}
+
+.required {
+    color: #dc3545;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">手动填写发票信息</h3>
+                    <div class="card-tools">
+                        <a href="{% url 'invoice:invoice_recognize' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> 返回识别页面
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        请为以下文件手动填写发票信息。标有 <span class="required">*</span> 的字段为必填项。
+                    </div>
+                    
+                    <form method="post" id="manualInputForm">
+                        {% csrf_token %}
+                        
+                        <div class="btn-group mb-3">
+                            <button type="button" class="btn btn-outline-primary" onclick="selectAll()">全选</button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="selectNone()">取消全选</button>
+                        </div>
+                        
+                        {% for data in recognition_data %}
+                        <div class="recognition-card {% if data.recognition.status == 'FAILED' %}failed{% elif data.recognition.status == 'COMPLETED' %}success{% endif %}">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input recognition-checkbox" type="checkbox" 
+                                       id="recognition_{{ data.recognition.pk }}_selected" 
+                                       name="recognition_{{ data.recognition.pk }}_selected" 
+                                       value="1" checked>
+                                <label class="form-check-label" for="recognition_{{ data.recognition.pk }}_selected">
+                                    <strong>选择此文件进行保存</strong>
+                                </label>
+                            </div>
+                            
+                            <div class="file-info">
+                                <h5><i class="fas fa-file"></i> {{ data.filename }}</h5>
+                                <p><strong>状态:</strong> 
+                                    <span class="badge {% if data.recognition.status == 'FAILED' %}badge-danger{% elif data.recognition.status == 'COMPLETED' %}badge-success{% else %}badge-warning{% endif %}">
+                                        {{ data.status_display }}
+                                    </span>
+                                </p>
+                                {% if data.error_message %}
+                                <div class="error-message">
+                                    <strong>错误信息:</strong> {{ data.error_message }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- 基本信息 -->
+                            <h6><i class="fas fa-info-circle"></i> 基本信息</h6>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_invoice_number">发票号码 <span class="required">*</span></label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_invoice_number" 
+                                           name="recognition_{{ data.recognition.pk }}_invoice_number" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.invoice_number|default:'' }}{% endif %}" 
+                                           required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_invoice_date">开票日期</label>
+                                    <input type="date" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_invoice_date" 
+                                           name="recognition_{{ data.recognition.pk }}_invoice_date" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.invoice_date|default:'' }}{% endif %}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_category">发票分类</label>
+                                    <select class="form-control" 
+                                            id="recognition_{{ data.recognition.pk }}_category" 
+                                            name="recognition_{{ data.recognition.pk }}_category">
+                                        <option value="">请选择分类</option>
+                                        {% for category in categories %}
+                                        <option value="{{ category.pk }}">{{ category.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- 金额信息 -->
+                            <h6><i class="fas fa-dollar-sign"></i> 金额信息</h6>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_total_amount">价税合计</label>
+                                    <input type="number" step="0.01" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_total_amount" 
+                                           name="recognition_{{ data.recognition.pk }}_total_amount" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.total_amount|default:'' }}{% endif %}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_tax_amount">税额</label>
+                                    <input type="number" step="0.01" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_tax_amount" 
+                                           name="recognition_{{ data.recognition.pk }}_tax_amount" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.tax_amount|default:'' }}{% endif %}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_amount_without_tax">不含税金额</label>
+                                    <input type="number" step="0.01" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_amount_without_tax" 
+                                           name="recognition_{{ data.recognition.pk }}_amount_without_tax" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.amount_without_tax|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            
+                            <!-- 销售方信息 -->
+                            <h6><i class="fas fa-building"></i> 销售方信息</h6>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_seller_name">销售方名称 <span class="required">*</span></label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_seller_name" 
+                                           name="recognition_{{ data.recognition.pk }}_seller_name" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.seller_name|default:'' }}{% endif %}" 
+                                           required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_seller_tax_number">纳税人识别号</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_seller_tax_number" 
+                                           name="recognition_{{ data.recognition.pk }}_seller_tax_number" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.seller_tax_number|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_seller_address">地址</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_seller_address" 
+                                           name="recognition_{{ data.recognition.pk }}_seller_address" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.seller_address|default:'' }}{% endif %}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_seller_phone">电话</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_seller_phone" 
+                                           name="recognition_{{ data.recognition.pk }}_seller_phone" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.seller_phone|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="recognition_{{ data.recognition.pk }}_seller_bank">开户行及账号</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_seller_bank" 
+                                           name="recognition_{{ data.recognition.pk }}_seller_bank" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.seller_bank|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            
+                            <!-- 购买方信息 -->
+                            <h6><i class="fas fa-user"></i> 购买方信息</h6>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_buyer_name">购买方名称 <span class="required">*</span></label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_buyer_name" 
+                                           name="recognition_{{ data.recognition.pk }}_buyer_name" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.buyer_name|default:'' }}{% endif %}" 
+                                           required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_buyer_tax_number">纳税人识别号</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_buyer_tax_number" 
+                                           name="recognition_{{ data.recognition.pk }}_buyer_tax_number" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.buyer_tax_number|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_buyer_address">地址</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_buyer_address" 
+                                           name="recognition_{{ data.recognition.pk }}_buyer_address" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.buyer_address|default:'' }}{% endif %}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="recognition_{{ data.recognition.pk }}_buyer_phone">电话</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_buyer_phone" 
+                                           name="recognition_{{ data.recognition.pk }}_buyer_phone" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.buyer_phone|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="recognition_{{ data.recognition.pk }}_buyer_bank">开户行及账号</label>
+                                    <input type="text" class="form-control" 
+                                           id="recognition_{{ data.recognition.pk }}_buyer_bank" 
+                                           name="recognition_{{ data.recognition.pk }}_buyer_bank" 
+                                           value="{% if data.parsed_result %}{{ data.parsed_result.buyer_bank|default:'' }}{% endif %}">
+                                </div>
+                            </div>
+                            
+                            <!-- 备注信息 -->
+                            <h6><i class="fas fa-comment"></i> 备注信息</h6>
+                            <div class="form-row">
+                                <div class="form-group full-width">
+                                    <label for="recognition_{{ data.recognition.pk }}_description">描述</label>
+                                    <textarea class="form-control" rows="3" 
+                                              id="recognition_{{ data.recognition.pk }}_description" 
+                                              name="recognition_{{ data.recognition.pk }}_description">{% if data.parsed_result %}{{ data.parsed_result.description|default:'' }}{% endif %}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <div class="form-group text-center">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> 保存选中的发票
+                            </button>
+                            <a href="{% url 'invoice:invoice_recognize' %}" class="btn btn-secondary btn-lg ml-2">
+                                <i class="fas fa-times"></i> 取消
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function selectAll() {
+    $('.recognition-checkbox').prop('checked', true);
+}
+
+function selectNone() {
+    $('.recognition-checkbox').prop('checked', false);
+}
+
+// 表单验证
+$('#manualInputForm').on('submit', function(e) {
+    var hasSelected = $('.recognition-checkbox:checked').length > 0;
+    if (!hasSelected) {
+        e.preventDefault();
+        alert('请至少选择一个文件进行保存！');
+        return false;
+    }
+    
+    // 验证选中项的必填字段
+    var hasError = false;
+    $('.recognition-checkbox:checked').each(function() {
+        var prefix = $(this).attr('name').replace('_selected', '');
+        var invoiceNumber = $('input[name="' + prefix + '_invoice_number"]').val().trim();
+        var sellerName = $('input[name="' + prefix + '_seller_name"]').val().trim();
+        var buyerName = $('input[name="' + prefix + '_buyer_name"]').val().trim();
+        
+        if (!invoiceNumber || !sellerName || !buyerName) {
+            hasError = true;
+            return false;
+        }
+    });
+    
+    if (hasError) {
+        e.preventDefault();
+        alert('请填写所有选中文件的必填字段（发票号码、销售方名称、购买方名称）！');
+        return false;
+    }
+});
+</script>
+{% endblock %}

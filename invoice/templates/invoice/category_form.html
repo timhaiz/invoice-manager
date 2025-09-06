@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if form.instance.id %}编辑类别{% else %}添加类别{% endif %} - 发票管理系统{% endblock %}
+
+{% block page_title %}{% if form.instance.id %}编辑类别{% else %}添加类别{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-tags"></i> {% if form.instance.id %}编辑类别{% else %}添加类别{% endif %}
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {{ form|crispy }}
+            
+            <div class="form-group mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+                <a href="{% if form.instance.id %}{% url 'invoice:category_detail' form.instance.id %}{% else %}{% url 'invoice:category_list' %}{% endif %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> 取消
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

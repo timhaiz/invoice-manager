@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}添加类别 - 发票管理系统{% endblock %}
+
+{% block page_title %}添加类别{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-tags"></i> 添加类别
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label for="name" class="form-label">类别名称 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="description" class="form-label">描述</label>
+                <textarea class="form-control" id="description" name="description" rows="3" placeholder="请输入类别描述（可选）"></textarea>
+            </div>
+            
+            <div class="form-group mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+                <a href="{% url 'invoice:category_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> 取消
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
