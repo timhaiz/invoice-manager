@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     'invoice',
     # 其他第三方应用
     'crispy_forms',
-    'crispy_bootstrap4',
     'django_filters',
     'django_tables2',
 ]
