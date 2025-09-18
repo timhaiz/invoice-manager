@@ -62,13 +62,14 @@
         <i class="fas fa-check-circle"></i> 识别结果
     </div>
     <div class="card-body">
-        <form method="post" action="{% url 'invoice:invoice_confirm' %}">
+        <form method="post" action="{% url 'invoice:batch_confirm' recognition_ids %}">
             {% csrf_token %}
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
                         <tr>
                             <th>选择</th>
+                            <th>文件名</th>
                             <th>发票号码</th>
                             <th>金额</th>
                             <th>日期</th>
@@ -81,7 +82,11 @@
                         {% for invoice in recognized_invoices %}
                         <tr>
                             <td>
-                                <input type="checkbox" name="invoice_ids" value="{{ forloop.counter0 }}" class="invoice-confirm-checkbox" checked>
+                                <input type="checkbox" name="recognition_ids" value="{{ invoice.recognition_id }}" class="invoice-confirm-checkbox" checked>
+                            </td>
+                            <td>
+                                <i class="fas fa-file-pdf text-danger me-2"></i>
+                                {{ invoice.filename }}
                             </td>
                             <td>{{ invoice.invoice_number }}</td>
                             <td>{{ invoice.amount|floatformat:2 }}</td>

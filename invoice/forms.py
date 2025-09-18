@@ -91,10 +91,15 @@ class InvoiceForm(forms.ModelForm):
         tax_amount = cleaned_data.get('tax_amount', 0)
         total_amount = cleaned_data.get('total_amount')
         
-        # 检查重复发票（仅在新建时，只检查发票号码）
+        # 检查重复发票（仅在新建时，综合多个字段判断）
         if not self.instance.pk and invoice_number:
-            if InvoiceValidator.check_duplicate(invoice_number):
-                raise ValidationError('该发票号码已存在')
+            seller_name = cleaned_data.get('seller_name')
+            invoice_date = cleaned_data.get('invoice_date')
+            # 使用total_amount进行重复检查
+            check_amount = cleaned_data.get('total_amount') or (cleaned_data.get('amount', 0) + cleaned_data.get('tax_amount', 0))
+            
+            if InvoiceValidator.check_duplicate(invoice_number, seller_name, check_amount, invoice_date):
+                raise ValidationError('该发票已存在（发票号码、销售方、金额、日期匹配）')
         
         # 验证金额计算
         if amount is not None and tax_amount is not None:

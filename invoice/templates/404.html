@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}页面未找到 - 发票管理系统{% endblock %}
+
+{% block page_title %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .error-container {
+        text-align: center;
+        padding: 60px 0;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .error-icon {
+        font-size: 120px;
+        color: #6c757d;
+        margin-bottom: 30px;
+        animation: bounce 2s infinite;
+    }
+    
+    .error-code {
+        font-size: 72px;
+        font-weight: bold;
+        color: #dc3545;
+        margin-bottom: 20px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .error-title {
+        font-size: 32px;
+        color: #495057;
+        margin-bottom: 20px;
+        font-weight: 600;
+    }
+    
+    .error-message {
+        font-size: 18px;
+        color: #6c757d;
+        margin-bottom: 40px;
+        max-width: 600px;
+        line-height: 1.6;
+    }
+    
+    .error-actions {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .btn-home {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        border: none;
+        padding: 12px 30px;
+        font-size: 16px;
+        border-radius: 25px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+    }
+    
+    .btn-home:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+        background: linear-gradient(45deg, #0056b3, #004085);
+    }
+    
+    .btn-back {
+        background: linear-gradient(45deg, #28a745, #1e7e34);
+        border: none;
+        padding: 12px 30px;
+        font-size: 16px;
+        border-radius: 25px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+    
+    .btn-back:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        background: linear-gradient(45deg, #1e7e34, #155724);
+    }
+    
+    .invoice-decoration {
+        position: absolute;
+        opacity: 0.1;
+        font-size: 200px;
+        color: #007bff;
+        z-index: -1;
+    }
+    
+    .invoice-decoration.top-left {
+        top: 10%;
+        left: 10%;
+        transform: rotate(-15deg);
+    }
+    
+    .invoice-decoration.bottom-right {
+        bottom: 10%;
+        right: 10%;
+        transform: rotate(15deg);
+    }
+    
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+        }
+        40% {
+            transform: translateY(-10px);
+        }
+        60% {
+            transform: translateY(-5px);
+        }
+    }
+    
+    .search-suggestion {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 30px;
+        border-left: 4px solid #007bff;
+    }
+    
+    .search-suggestion h5 {
+        color: #007bff;
+        margin-bottom: 15px;
+    }
+    
+    .suggestion-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+    }
+    
+    .suggestion-links a {
+        color: #007bff;
+        text-decoration: none;
+        padding: 5px 15px;
+        border: 1px solid #007bff;
+        border-radius: 15px;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+    
+    .suggestion-links a:hover {
+        background: #007bff;
+        color: white;
+    }
+    
+    @media (max-width: 768px) {
+        .error-code {
+            font-size: 48px;
+        }
+        
+        .error-title {
+            font-size: 24px;
+        }
+        
+        .error-message {
+            font-size: 16px;
+            padding: 0 20px;
+        }
+        
+        .error-actions {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .invoice-decoration {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-container position-relative">
+    <!-- 装饰性发票图标 -->
+    <i class="fas fa-file-invoice invoice-decoration top-left"></i>
+    <i class="fas fa-file-invoice invoice-decoration bottom-right"></i>
+    
+    <!-- 错误图标 -->
+    <div class="error-icon">
+        <i class="fas fa-search"></i>
+    </div>
+    
+    <!-- 错误代码 -->
+    <div class="error-code">404</div>
+    
+    <!-- 错误标题 -->
+    <h1 class="error-title">页面未找到</h1>
+    
+    <!-- 错误描述 -->
+    <p class="error-message">
+        抱歉，您访问的页面不存在或已被移动。<br>
+        可能是链接地址有误，或者该页面已被删除。<br>
+        请检查URL地址是否正确，或者尝试以下操作：
+    </p>
+    
+    <!-- 操作按钮 -->
+    <div class="error-actions">
+        <a href="{% url 'invoice:index' %}" class="btn btn-primary btn-home">
+            <i class="fas fa-home"></i> 返回首页
+        </a>
+        <button onclick="history.back()" class="btn btn-success btn-back">
+            <i class="fas fa-arrow-left"></i> 返回上页
+        </button>
+    </div>
+    
+    <!-- 搜索建议 -->
+    <div class="search-suggestion">
+        <h5><i class="fas fa-lightbulb"></i> 您可能在寻找：</h5>
+        <div class="suggestion-links">
+            <a href="{% url 'invoice:invoice_list' %}">
+                <i class="fas fa-list"></i> 发票列表
+            </a>
+            <a href="{% url 'invoice:invoice_add' %}">
+                <i class="fas fa-plus"></i> 添加发票
+            </a>
+            <a href="{% url 'invoice:invoice_recognize' %}">
+                <i class="fas fa-eye"></i> 发票识别
+            </a>
+            <a href="{% url 'invoice:category_list' %}">
+                <i class="fas fa-tags"></i> 发票类别
+            </a>
+            <a href="{% url 'invoice:report_summary' %}">
+                <i class="fas fa-chart-bar"></i> 统计报表
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // 添加一些交互效果
+    $('.btn-home, .btn-back').hover(
+        function() {
+            $(this).find('i').addClass('fa-bounce');
+        },
+        function() {
+            $(this).find('i').removeClass('fa-bounce');
+        }
+    );
+    
+    // 记录404错误（可选）
+    console.log('404 Error: Page not found - ' + window.location.href);
+});
+</script>
+{% endblock %}

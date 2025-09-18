@@ -497,12 +497,44 @@ class InvoiceValidator:
         return bool(re.match(r'^[A-Z0-9]{15,18}$', tax_id))
     
     @staticmethod
-    def check_duplicate(invoice_number):
-        """检查是否有重复发票（主要检查发票号码）"""
+    def check_duplicate(invoice_number, seller_name=None, amount=None, invoice_date=None):
+        """检查是否有重复发票（综合多个字段判断）"""
         from .models import Invoice
-        if invoice_number:
-            return Invoice.objects.filter(invoice_number=invoice_number).exists()
-        return False
+        
+        if not invoice_number:
+            return False
+            
+        # 首先检查发票号码是否重复
+        base_query = Invoice.objects.filter(invoice_number=invoice_number)
+        
+        if not base_query.exists():
+            return False
+            
+        # 如果只提供发票号码，则认为重复
+        if not any([seller_name, amount, invoice_date]):
+            return True
+            
+        # 进一步检查其他字段，如果发票号码相同且其他关键信息也匹配，则认为是重复发票
+        duplicate_query = base_query
+        
+        if seller_name:
+            duplicate_query = duplicate_query.filter(seller_name__icontains=seller_name.strip())
+            
+        if amount is not None:
+            # 允许金额有小幅差异（0.01元以内）
+            try:
+                amount_float = float(amount)
+                duplicate_query = duplicate_query.filter(
+                    total_amount__gte=amount_float - 0.01,
+                    total_amount__lte=amount_float + 0.01
+                )
+            except (ValueError, TypeError):
+                pass
+                
+        if invoice_date:
+            duplicate_query = duplicate_query.filter(invoice_date=invoice_date)
+            
+        return duplicate_query.exists()
     
     @staticmethod
     def validate_company_info(buyer_name, buyer_tax_id, company):

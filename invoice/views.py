@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.db.models import Sum, Count, Q
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_protect
 from django.conf import settings
 
 from .models import Company, InvoiceCategory, Invoice, InvoiceRecognition
@@ -16,6 +17,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import logging
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,16 @@ def invoice_list(request):
             pass
     
     # 分页
-    paginator = Paginator(invoices, 20)  # 每页显示20条
+    page_size = request.GET.get('page_size', '20')  # 默认每页显示20条
+    try:
+        page_size = int(page_size)
+        # 限制分页大小在合理范围内
+        if page_size not in [20, 40, 80, 500]:
+            page_size = 20
+    except (ValueError, TypeError):
+        page_size = 20
+    
+    paginator = Paginator(invoices, page_size)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -116,6 +127,8 @@ def invoice_list(request):
         'categories': categories,
         'buyer_companies': buyer_companies,
         'invoice_status_choices': Invoice.STATUS_CHOICES,
+        'current_page_size': page_size,
+        'page_size_choices': [20, 40, 80, 500],
     }
     return render(request, 'invoice/invoice_list.html', context)
 
@@ -218,6 +231,65 @@ def invoice_delete(request, pk):
     return redirect('invoice:invoice_list')
 
 
+# 受保护的媒体文件服务视图
+def protected_media_view(request, file_path):
+    """
+    受保护的媒体文件访问视图
+    只有登录用户才能访问媒体文件，未登录用户返回404
+    """
+    import mimetypes
+    from django.http import Http404, FileResponse
+    
+    # 检查用户是否登录，未登录直接返回404
+    if not request.user.is_authenticated:
+        logger.warning(f"未登录用户尝试访问媒体文件: {file_path}")
+        raise Http404("页面不存在")
+    
+    # 构建完整的文件路径
+    full_path = os.path.join(settings.MEDIA_ROOT, file_path)
+    
+    # 检查文件是否存在
+    if not os.path.exists(full_path):
+        logger.warning(f"用户 {request.user.username} 尝试访问不存在的文件: {file_path}")
+        raise Http404("文件不存在")
+    
+    # 检查文件是否在MEDIA_ROOT目录内（防止路径遍历攻击）
+    if not os.path.abspath(full_path).startswith(os.path.abspath(settings.MEDIA_ROOT)):
+        logger.warning(f"用户 {request.user.username} 尝试访问非法路径: {file_path}")
+        raise Http404("非法访问")
+    
+    # 记录访问日志
+    logger.info(f"用户 {request.user.username} 访问媒体文件: {file_path}")
+    
+    # 获取文件的MIME类型
+    content_type, _ = mimetypes.guess_type(full_path)
+    if content_type is None:
+        content_type = 'application/octet-stream'
+    
+    # 返回文件响应
+    try:
+        response = FileResponse(
+            open(full_path, 'rb'),
+            content_type=content_type,
+            as_attachment=False  # 设置为False允许在浏览器中查看，True则强制下载
+        )
+        
+        # 设置文件名
+        filename = os.path.basename(file_path)
+        if request.GET.get('download') == '1':
+            # 如果URL参数包含download=1，则强制下载
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            # 否则允许在浏览器中查看
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"访问媒体文件失败: {str(e)}")
+        raise Http404("文件访问失败")
+
+
 def auto_confirm_recognition(recognition, user):
     """
     自动确认识别结果，创建发票记录
@@ -235,39 +307,40 @@ def auto_confirm_recognition(recognition, user):
             logger.warning(f"缺少必要字段 {field}，无法自动确认: {recognition.pk}")
             return None
     
-    # 检查是否有重复发票，如果重复则自动生成新的发票号码
+    # 检查是否有重复发票（综合多个字段判断）
     original_invoice_number = invoice_info.get('invoice_number')
-    invoice_number = original_invoice_number
-    counter = 1
-    while InvoiceValidator.check_duplicate(invoice_number):
-        invoice_number = f"{original_invoice_number}_copy_{counter}"
-        counter += 1
-        if counter > 10:  # 防止无限循环
-            logger.warning(f"发票号码重复次数过多，无法自动确认: {original_invoice_number}")
-            return None
+    seller_name = invoice_info.get('seller_name')
+    amount = invoice_info.get('total_amount') or invoice_info.get('amount')
+    invoice_date_str = invoice_info.get('invoice_date')
     
-    if invoice_number != original_invoice_number:
-        logger.info(f"发票号码重复，自动生成新号码: {original_invoice_number} -> {invoice_number}")
-        invoice_info['invoice_number'] = invoice_number
+    # 解析日期用于重复检查
+    invoice_date_for_check = None
+    if invoice_date_str:
+        try:
+            if isinstance(invoice_date_str, str):
+                date_formats = ['%Y-%m-%d', '%Y/%m/%d', '%Y年%m月%d日']
+                for fmt in date_formats:
+                    try:
+                        invoice_date_for_check = datetime.strptime(invoice_date_str, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+            else:
+                invoice_date_for_check = invoice_date_str
+        except Exception:
+            pass
+    
+    # 检查重复发票
+    if InvoiceValidator.check_duplicate(original_invoice_number, seller_name, amount, invoice_date_for_check):
+        logger.warning(f"发票重复，拒绝自动确认: {original_invoice_number} (销售方: {seller_name}, 金额: {amount})")
+        return None
     
     try:
-        # 解析日期
-        invoice_date_str = invoice_info.get('invoice_date')
-        if isinstance(invoice_date_str, str):
-            # 尝试多种日期格式
-            date_formats = ['%Y-%m-%d', '%Y/%m/%d', '%Y年%m月%d日']
-            invoice_date = None
-            for fmt in date_formats:
-                try:
-                    invoice_date = datetime.strptime(invoice_date_str, fmt).date()
-                    break
-                except ValueError:
-                    continue
-            if not invoice_date:
-                logger.warning(f"无法解析日期格式，无法自动确认: {invoice_date_str}")
-                return None
-        else:
-            invoice_date = invoice_date_str
+        # 使用之前解析的日期或重新解析
+        invoice_date = invoice_date_for_check
+        if not invoice_date and invoice_date_str:
+            logger.warning(f"无法解析日期格式，无法自动确认: {invoice_date_str}")
+            return None
         
         # 创建发票对象
         invoice = Invoice(
@@ -306,8 +379,14 @@ def auto_confirm_recognition(recognition, user):
 @login_required
 def download_invoice_file(request, pk):
     """下载发票识别记录的原始文件"""
+    # 添加详细的调试日志
+    logger.info(f"下载请求开始 - 用户: {request.user}, 是否认证: {request.user.is_authenticated}, PK: {pk}")
+    logger.info(f"请求方法: {request.method}, 请求路径: {request.path}")
+    logger.info(f"User-Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}")
+    
     try:
         recognition = get_object_or_404(InvoiceRecognition, pk=pk)
+        logger.info(f"找到识别记录: {recognition}")
         
         if not recognition.file:
             messages.error(request, '该记录没有关联的文件')
@@ -328,11 +407,35 @@ def download_invoice_file(request, pk):
         
         # 设置响应头
         response = HttpResponse(file_content)
-        response['Content-Type'] = 'application/octet-stream'
-        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+        
+        # 根据文件扩展名设置正确的MIME类型
+        file_ext = os.path.splitext(file_name)[1].lower()
+        if file_ext == '.pdf':
+            response['Content-Type'] = 'application/pdf'
+        elif file_ext in ['.jpg', '.jpeg']:
+            response['Content-Type'] = 'image/jpeg'
+        elif file_ext == '.png':
+            response['Content-Type'] = 'image/png'
+        else:
+            response['Content-Type'] = 'application/octet-stream'
+        
+        # 使用更通用的文件名处理方式，同时提供ASCII和UTF-8文件名
+        # 创建一个安全的ASCII文件名作为fallback
+        safe_filename = ''.join(c if c.isascii() and (c.isalnum() or c in '.-_') else '_' for c in file_name)
+        if not safe_filename or safe_filename == '_' * len(safe_filename):
+            # 如果文件名全是特殊字符，使用默认名称
+            file_ext = os.path.splitext(file_name)[1] if '.' in file_name else ''
+            safe_filename = f'invoice_file{file_ext}'
+        
+        # 使用双重文件名格式：ASCII fallback + UTF-8编码
+        encoded_filename = quote(file_name.encode('utf-8'))
+        response['Content-Disposition'] = f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
         response['Content-Length'] = len(file_content)
         
+        # 添加调试日志
         logger.info(f"用户 {request.user.username} 下载了发票文件: {file_name}")
+        logger.info(f"Content-Disposition: attachment; filename*=UTF-8''{encoded_filename}")
+        logger.info(f"Content-Type: {response['Content-Type']}")
         return response
         
     except Exception as e:
@@ -342,9 +445,31 @@ def download_invoice_file(request, pk):
 
 # 批量下载发票文件视图
 @login_required
+@csrf_protect
 def batch_download_invoice_files(request):
     """批量下载发票文件"""
-    recognition_ids = request.GET.getlist('recognition_ids')
+    # 支持GET和POST方法，支持recognition_ids和invoice_ids参数
+    if request.method == 'POST':
+        recognition_ids = request.POST.getlist('recognition_ids')
+        invoice_ids = request.POST.getlist('invoice_ids')
+    else:
+        recognition_ids = request.GET.getlist('recognition_ids')
+        invoice_ids = request.GET.getlist('invoice_ids')
+    
+    # 如果传入的是发票ID，需要转换为识别记录ID
+    if invoice_ids and not recognition_ids:
+        try:
+            # 通过发票ID获取对应的识别记录ID
+            invoices = Invoice.objects.filter(id__in=invoice_ids).prefetch_related('recognitions')
+            recognition_ids = []
+            for invoice in invoices:
+                # 获取每个发票的识别记录
+                for recognition in invoice.recognitions.all():
+                    recognition_ids.append(str(recognition.id))
+        except Exception as e:
+            logger.error(f"获取识别记录失败: {str(e)}")
+            messages.error(request, '获取发票文件失败')
+            return redirect('invoice:invoice_list')
     
     if not recognition_ids:
         messages.error(request, '请选择要下载的文件')
@@ -358,6 +483,7 @@ def batch_download_invoice_files(request):
         zip_buffer = BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            file_count = 0
             for recognition_id in recognition_ids:
                 try:
                     recognition = InvoiceRecognition.objects.get(pk=recognition_id)
@@ -366,8 +492,17 @@ def batch_download_invoice_files(request):
                         file_path = recognition.file.path
                         file_name = os.path.basename(file_path)
                         
+                        # 如果文件名重复，添加序号
+                        base_name, ext = os.path.splitext(file_name)
+                        counter = 1
+                        original_file_name = file_name
+                        while file_name in [info.filename for info in zip_file.infolist()]:
+                            file_name = f"{base_name}_{counter}{ext}"
+                            counter += 1
+                        
                         # 添加文件到ZIP
                         zip_file.write(file_path, file_name)
+                        file_count += 1
                         
                 except InvoiceRecognition.DoesNotExist:
                     continue
@@ -375,13 +510,26 @@ def batch_download_invoice_files(request):
                     logger.warning(f"添加文件到ZIP失败: {str(e)}")
                     continue
         
+        if file_count == 0:
+            messages.error(request, '没有找到可下载的文件')
+            return redirect('invoice:invoice_list')
+        
         zip_buffer.seek(0)
         
         # 设置响应头
         response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-        response['Content-Disposition'] = f'attachment; filename="invoice_files_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip"'
+        zip_filename = f'发票文件_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
         
-        logger.info(f"用户 {request.user.username} 批量下载了 {len(recognition_ids)} 个发票文件")
+        # 使用更通用的文件名处理方式，提供ASCII fallback
+        safe_filename = f'invoice_files_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        encoded_filename = quote(zip_filename.encode('utf-8'))
+        response['Content-Disposition'] = f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+        
+        # 添加调试日志
+        logger.info(f"批量下载ZIP文件名: {zip_filename}")
+        logger.info(f"Content-Disposition: attachment; filename*=UTF-8''{encoded_filename}")
+        
+        logger.info(f"用户 {request.user.username} 批量下载了 {file_count} 个发票文件")
         return response
         
     except Exception as e:
@@ -545,6 +693,7 @@ def invoice_recognize(request):
         recognition_ids = []
         successful_recognitions = []
         failed_recognitions = []
+        auto_confirmed_count = 0
         
         # 批量处理上传的文件
         for uploaded_file in uploaded_files:
@@ -569,18 +718,23 @@ def invoice_recognize(request):
                     recognition.status = 'COMPLETED'
                     recognition.save()
                     
-                    # 自动确认识别结果，创建发票记录
-                    try:
-                        auto_confirmed_invoice = auto_confirm_recognition(recognition, request.user)
-                        if auto_confirmed_invoice:
-                            successful_recognitions.append(recognition)
-                        else:
-                            # 自动确认失败，需要手动确认
-                            successful_recognitions.append(recognition)
-                    except Exception as e:
-                        logger.error(f"自动确认发票失败 {uploaded_file.name}: {str(e)}")
-                        # 自动确认失败，但识别成功，仍然加入成功列表
-                        successful_recognitions.append(recognition)
+                    # 检查识别结果是否完整，如果完整则自动确认
+                    required_fields = ['invoice_number', 'amount', 'invoice_date']
+                    is_complete = all(invoice_info.get(field) for field in required_fields)
+                    
+                    if is_complete:
+                        # 信息完整，自动确认保存
+                        try:
+                            auto_confirmed_invoice = auto_confirm_recognition(recognition, request.user)
+                            if auto_confirmed_invoice:
+                                # 自动确认成功，增加计数器
+                                auto_confirmed_count += 1
+                                continue
+                        except Exception as e:
+                            logger.error(f"自动确认发票失败 {uploaded_file.name}: {str(e)}")
+                    
+                    # 信息不完整或自动确认失败，加入成功列表等待用户确认
+                    successful_recognitions.append(recognition)
                 else:
                     recognition.result = text or '识别失败'
                     recognition.status = 'FAILED'
@@ -602,23 +756,60 @@ def invoice_recognize(request):
                 })
         
         # 处理结果
-        if successful_recognitions and not failed_recognitions:
-            # 全部成功的情况，已自动确认，直接跳转到发票列表
-            messages.success(request, f'成功识别并自动确认了 {len(successful_recognitions)} 张发票')
-            return redirect('invoice:invoice_list')
-        elif successful_recognitions and failed_recognitions:
-            # 部分成功部分失败的情况
-            messages.success(request, f'成功识别并自动确认了 {len(successful_recognitions)} 张发票')
-            messages.warning(request, f'有 {len(failed_recognitions)} 张发票识别失败，需要手动处理')
-            # 对于失败的记录，进入手动填写页面
-            failed_recognition_ids = []
-            for recognition in InvoiceRecognition.objects.filter(status='FAILED', created_by=request.user).order_by('-created_at'):
-                if recognition.pk in recognition_ids:
-                    failed_recognition_ids.append(recognition.pk)
-            if failed_recognition_ids:
-                recognition_ids_str = ','.join(map(str, failed_recognition_ids))
-                return redirect('invoice:manual_input', recognition_ids=recognition_ids_str)
-            return redirect('invoice:invoice_list')
+        total_processed = auto_confirmed_count + len(successful_recognitions)
+        
+        # 显示处理结果消息
+        if auto_confirmed_count > 0:
+            messages.success(request, f'成功自动保存了 {auto_confirmed_count} 张发票（信息完整）')
+        
+        if successful_recognitions:
+            # 有成功识别的发票，显示识别结果让用户确认
+            messages.info(request, f'有 {len(successful_recognitions)} 张发票需要确认（信息不完整），请检查并确认识别结果')
+            
+            # 准备识别结果数据
+            recognized_invoices = []
+            for recognition in successful_recognitions:
+                try:
+                    invoice_info = json.loads(recognition.result)
+                    recognized_invoices.append({
+                        'recognition_id': recognition.pk,
+                        'invoice_number': invoice_info.get('invoice_number', ''),
+                        'amount': invoice_info.get('amount', 0),
+                        'invoice_date': invoice_info.get('invoice_date', ''),
+                        'seller_name': invoice_info.get('seller_name', ''),
+                        'buyer_name': invoice_info.get('buyer_name', ''),
+                        'confidence': invoice_info.get('confidence', 95),
+                        'filename': os.path.basename(recognition.file.name) if recognition.file else '未知文件'
+                    })
+                except json.JSONDecodeError:
+                    continue
+            
+            # 检查百度OCR配置状态
+            from .baidu_ocr_config import BaiduOCRConfig
+            
+            # 获取当前用户的待确认识别记录
+            pending_recognitions = InvoiceRecognition.objects.filter(
+                status='COMPLETED',
+                invoice__isnull=True,  # 未关联发票的记录
+                created_by=request.user
+            ).order_by('-created_at')
+            
+            context = {
+                'baidu_ocr_configured': BaiduOCRConfig.is_configured(),
+                'pending_recognitions': pending_recognitions,
+                'recognized_invoices': recognized_invoices,
+                'recognition_ids': ','.join(map(str, [r.pk for r in successful_recognitions]))
+            }
+            
+            if failed_recognitions:
+                messages.warning(request, f'有 {len(failed_recognitions)} 张发票识别失败')
+            
+            return render(request, 'invoice/invoice_recognize.html', context)
+        
+        elif auto_confirmed_count > 0 and not failed_recognitions:
+            # 只有自动确认成功的发票，直接跳转回识别页面
+            return redirect('invoice:invoice_recognize')
+        
         elif failed_recognitions:
             # 全部失败的情况，进入手动填写页面
             failed_recognition_ids = []
@@ -667,9 +858,18 @@ def invoice_confirm(request, pk):
         invoice_number = request.POST.get('invoice_number')
         invoice_content = request.POST.get('invoice_content')
         
-        # 检查是否有重复发票
-        if InvoiceValidator.check_duplicate(invoice_number):
-            messages.error(request, '该发票已存在')
+        # 检查是否有重复发票（综合多个字段判断）
+        seller_name = request.POST.get('seller_name')
+        total_amount = request.POST.get('total_amount')
+        invoice_date_str = request.POST.get('invoice_date')
+        
+        try:
+            invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date() if invoice_date_str else None
+        except ValueError:
+            invoice_date = None
+            
+        if InvoiceValidator.check_duplicate(invoice_number, seller_name, total_amount, invoice_date):
+            messages.error(request, '该发票已存在（发票号码、销售方、金额、日期匹配）')
             return redirect('invoice:invoice_confirm', pk=recognition.pk)
         
         try:
@@ -761,11 +961,21 @@ def batch_confirm(request, recognition_ids):
                 prefix = f'recognition_{recognition_id}_'
                 invoice_number = request.POST.get(f'{prefix}invoice_number')
                 
-                # 检查是否有重复发票
-                if InvoiceValidator.check_duplicate(invoice_number):
+                # 获取其他字段用于重复检查
+                seller_name = request.POST.get(f'{prefix}seller_name')
+                total_amount = request.POST.get(f'{prefix}total_amount')
+                invoice_date_str = request.POST.get(f'{prefix}invoice_date')
+                
+                try:
+                    invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date() if invoice_date_str else None
+                except ValueError:
+                    invoice_date = None
+                
+                # 检查是否有重复发票（综合多个字段判断）
+                if InvoiceValidator.check_duplicate(invoice_number, seller_name, total_amount, invoice_date):
                     failed_saves.append({
                         'filename': recognition.file.name,
-                        'error': '该发票已存在'
+                        'error': '该发票已存在（发票号码、销售方、金额、日期匹配）'
                     })
                     continue
                 

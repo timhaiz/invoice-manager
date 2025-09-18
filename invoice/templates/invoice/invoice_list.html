@@ -142,7 +142,7 @@
                                 </a>
                                 {% for recognition in invoice.recognitions.all %}
                                     {% if recognition.file %}
-                                        <a href="{% url 'invoice:download_invoice_file' recognition.id %}" class="btn btn-sm btn-outline-success btn-action" data-bs-toggle="tooltip" title="下载原始文件">
+                                        <a href="{{ recognition.file.url }}" class="btn btn-sm btn-outline-success btn-action" data-bs-toggle="tooltip" title="下载原始文件" download>
                                             <i class="fas fa-download"></i>
                                         </a>
                                     {% endif %}
@@ -164,9 +164,28 @@
     </div>
 </div>
 
+<!-- 分页信息和大小选择器 -->
+{% if page_obj %}
+<div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+    <div class="d-flex align-items-center">
+        <span class="text-muted me-3">
+            显示第 {{ page_obj.start_index }} - {{ page_obj.end_index }} 条，共 {{ page_obj.paginator.count }} 条记录
+        </span>
+        <div class="d-flex align-items-center">
+            <label for="page-size-select" class="form-label me-2 mb-0">每页显示：</label>
+            <select id="page-size-select" class="form-select form-select-sm" style="width: auto;">
+                {% for size in page_size_choices %}
+                <option value="{{ size }}" {% if size == current_page_size %}selected{% endif %}>{{ size }} 条</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- 分页 -->
 {% if page_obj.has_other_pages %}
-<nav aria-label="Page navigation" class="mt-4">
+<nav aria-label="Page navigation" class="mt-2">
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
         <li class="page-item">
@@ -229,6 +248,17 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 分页大小选择器处理
+    const pageSizeSelect = document.getElementById('page-size-select');
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', function() {
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('page_size', this.value);
+            currentUrl.searchParams.delete('page'); // 重置到第一页
+            window.location.href = currentUrl.toString();
+        });
+    }
+
     const selectAllCheckbox = document.getElementById('select-all');
     const invoiceCheckboxes = document.querySelectorAll('.invoice-checkbox');
     const batchActions = document.getElementById('batch-actions');
