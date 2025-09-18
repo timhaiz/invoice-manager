@@ -9,11 +9,15 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
-
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 加载.env文件
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,7 +29,15 @@ SECRET_KEY = 'django-insecure-3^v)jw5y4k6=3@g_#0&q^qfs5-*e2%1-70o=pnfpgp%o2+2(-l
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['invoice.niixmiro.com','127.0.0.1','localhost']  # 允许所有主机访问，生产环境请修改为具体域名
+
+# CSRF 可信来源配置
+CSRF_TRUSTED_ORIGINS = [
+    'http://invoice.niixmiro.com',
+    'https://invoice.niixmiro.com',
+    'http://127.0.0.1',
+    'http://localhost',
+]
 
 
 # Application definition
@@ -185,9 +197,9 @@ LOGGING = {
 }
 
 # 百度OCR API配置 - 请在环境变量中设置
-# BAIDU_OCR_APP_ID = os.getenv('BAIDU_OCR_APP_ID', '')
-# BAIDU_OCR_API_KEY = os.getenv('BAIDU_OCR_API_KEY', '')
-# BAIDU_OCR_SECRET_KEY = os.getenv('BAIDU_OCR_SECRET_KEY', '')
+BAIDU_OCR_APP_ID = os.getenv('BAIDU_OCR_APP_ID', '')
+BAIDU_OCR_API_KEY = os.getenv('BAIDU_OCR_API_KEY', '')
+BAIDU_OCR_SECRET_KEY = os.getenv('BAIDU_OCR_SECRET_KEY', '')
 
 # 缓存配置（用于存储百度OCR的access_token）
 CACHES = {
@@ -200,3 +212,9 @@ CACHES = {
         }
     }
 }
+
+# 默认超级用户配置信息
+# 用户名: admin
+# 密码: admin123
+# 邮箱: admin@example.com
+# 使用命令创建: python manage.py create_default_superuser

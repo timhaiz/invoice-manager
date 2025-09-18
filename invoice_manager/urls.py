@@ -18,12 +18,18 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# 添加受保护的媒体文件访问路由（必须在其他路径之前）
+from invoice.views import protected_media_view
+
 urlpatterns = [
+    # 受保护的媒体文件访问路由（优先级最高）
+    path('media/<path:file_path>', protected_media_view, name='protected_media'),
+    
+    # 其他路由
     path('admin/', admin.site.urls),
     path('', include('invoice.urls')),
 ]
 
-# 添加媒体文件的URL配置
+# 添加静态文件的URL配置（仅在DEBUG模式下）
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
